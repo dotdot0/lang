@@ -123,6 +123,24 @@ class CallExprAST : public ExprAST{
     : Calle(Calle), Args(std::move(Args)){}
 };
 
+class ProtoTypeAST{
+  std::string Name;
+  std::vector<std::string> Args;
+
+  public: 
+    ProtoTypeAST(const std::string &Name, std::vector<std::string> Args)
+    : Name(Name), Args(Args){}
+
+    const std::string &getName() const { return Name; }
+};
+
+class FunctionAST{
+  std::unique_ptr<ProtoTypeAST> Proto; 
+  std::unique_ptr<ExprAST> Body;
+
+  FunctionAST(std::unique_ptr<ProtoTypeAST> Proto, std::unique_ptr<ExprAST> Body)
+  : Proto(std::move(Proto)), Body(std::move(Body)) {}
+};
   
 int main(){
   // while(true){
