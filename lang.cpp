@@ -110,7 +110,9 @@ class BinaryExprAST: public ExprAST{
   std::unique_ptr<ExprAST> LHS, RHS;
 
   public: 
-    BinaryExprAST(char Op, std::unique_ptr<ExprAST> LHS, std::unique_ptr<ExprAST> RHS): 
+    BinaryExprAST(char Op, 
+    std::unique_ptr<ExprAST> LHS, 
+    std::unique_ptr<ExprAST> RHS): 
     Op(Op), LHS(std::move(LHS)), RHS(std::move(RHS)) {}
 };
 
@@ -119,7 +121,8 @@ class CallExprAST : public ExprAST{
   std::vector<std::unique_ptr<ExprAST>> Args;
 
   public: 
-    CallExprAST(const std::string &Calle, std::vector<std::unique_ptr<ExprAST>> Args) 
+    CallExprAST(const std::string &Calle, 
+    std::vector<std::unique_ptr<ExprAST>> Args) 
     : Calle(Calle), Args(std::move(Args)){}
 };
 
@@ -128,7 +131,8 @@ class ProtoTypeAST{
   std::vector<std::string> Args;
 
   public: 
-    ProtoTypeAST(const std::string &Name, std::vector<std::string> Args)
+    ProtoTypeAST(const std::string &Name, 
+    std::vector<std::string> Args)
     : Name(Name), Args(Args){}
 
     const std::string &getName() const { return Name; }
@@ -138,15 +142,50 @@ class FunctionAST{
   std::unique_ptr<ProtoTypeAST> Proto; 
   std::unique_ptr<ExprAST> Body;
 
-  FunctionAST(std::unique_ptr<ProtoTypeAST> Proto, std::unique_ptr<ExprAST> Body)
+  FunctionAST(std::unique_ptr<ProtoTypeAST> Proto, 
+  std::unique_ptr<ExprAST> Body)
   : Proto(std::move(Proto)), Body(std::move(Body)) {}
 };
+
+static int currTok;
+static int getNextToken(){
+  return currTok = gettok();
+}
+
+static std::unique_ptr<ExprAST> LogError(const char* Str){
+  fprintf(stderr, "Error: %s\n", Str);
+  return nullptr;
+}
+
+static std::unique_ptr<ProtoTypeAST> LogErrorP(const char* Str){
+  LogError(Str);
+  return nullptr;
+}
+
+static std::unique_ptr<ExprAST> parseNumberExpr(){
+  auto Result = std::make_unique<NumberExprAST>(NumVal);
+  getNextToken();
+  return std::move(Result);
+}
+
+static std::unique_ptr<ExprAST> ParseParenExpr(){
+  getNextToken();
+  auto V = ParseExpression();
+  if(!V) return nullptr;
+
+  if(currTok != ')') return LogError("expected ')'");
+  getNextToken();
+  return V;
+}
+
+static std::unique_ptr<ExprAST> ParseExpression(){
+  return nullptr;
+}
   
 int main(){
   // while(true){
   //   int tok = gettok();
   //   cout << token_to_string(tok) << endl;
   // }
-  return 1;
 }
 
