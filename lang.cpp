@@ -2,6 +2,7 @@
 #include<iostream>
 #include<memory>
 #include<vector>
+#include<map>
 
 using namespace std;
 
@@ -178,9 +179,67 @@ static std::unique_ptr<ExprAST> ParseParenExpr(){
   return V;
 }
 
+static std::unique_ptr<ExprAST> ParseIdentifierExpr(){
+  std::string IdName = IdentifierStr;
+  getNextToken();
+
+  if (currTok != '('){
+    return std::make_unique<VariableExprAST>(IdName);
+  }
+
+  getNextToken();
+  std::vector<std::unique_ptr<ExprAST>> Args; 
+  if(currTok != ')'){
+    while(true){
+      if(auto Arg = ParseExpression()){
+        Args.push_back(std::move(Arg));
+      }
+      else{
+        return nullptr;
+      }
+
+      if (currTok == ')')
+        break;
+
+      if (currTok != ',') 
+        return LogError("Expected ')' or ',' in argument list");
+
+      getNextToken();
+    }
+  }
+
+  getNextToken();
+  return std::make_unique<CallExprAST>(IdName, std::move(Args));
+}
+
+static std::unique_ptr<ExprAST> ParsePrimary(){
+  switch(currTok){
+    default: 
+      return LogError("unknown token when expecting an expression");
+    case tok_identifier:
+      return ParseIdentifierExpr();
+    case tok_number:
+      return parseNumberExpr();
+    case '(':
+      return ParseParenExpr();
+  }
+}
+
 static std::unique_ptr<ExprAST> ParseExpression(){
   return nullptr;
 }
+
+static std::map<char, int> BinOpPrecedence;
+
+static int GetTokPrecedence(){
+  if(!isascii(currTok))
+    return -1;
+
+  int TokPrec = BinOpPrecedence[currTok];
+  if(TokPrec <= 0) return -1;
+  return TokPrec;
+}
+
   
 int main(){
   // while(true){
