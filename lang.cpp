@@ -91,7 +91,7 @@ std::string token_to_string(int tok){
 */
 class ExprAST{
   public: 
-    virtual ~ExprAST(){}
+    virtual ~ExprAST() = default;
 };
 
 class NumberExprAST : public ExprAST{
@@ -226,7 +226,11 @@ static std::unique_ptr<ExprAST> ParsePrimary(){
 }
 
 static std::unique_ptr<ExprAST> ParseExpression(){
-  return nullptr;
+  auto LHS = ParsePrimary();
+  if(!LHS)
+    return nullptr;
+  
+  return ParseBinOpRHS(0, std::move(LHS));
 }
 
 static std::map<char, int> BinOpPrecedence;
@@ -240,8 +244,75 @@ static int GetTokPrecedence(){
   return TokPrec;
 }
 
+static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec, std::unique_ptr<ExprAST> LHS){
+  while(true){
+    int TokPrec = GetTokPrecedence();
+
+    if(TokPrec < ExprPrec) 
+      return LHS;
+    
+    int BinOp = currTok;
+    getNextToken();
+
+    auto RHS = ParsePrimary();
+    if(!RHS)
+      return nullptr;
+    int NextPrec = GetTokPrecedence();
+    if(TokPrec < NextPrec){
+      RHS = ParseBinOpRHS(TokPrec+1, std::move(RHS));
+      if(!RHS)
+        return nullptr;
+    }
+    LHS = std::make_unique<BinaryExprAST>(BinOp, std::move(LHS), std::move(RHS));
+  }
+}
+
+static std::unique_ptr<ProtoTypeAST> ParsePrototype(){
+  if(currTok != tok_identifier)
+    return LogErrorP("Expected function name in prototype");
+  
+  string FnName = IdentifierStr;
+  getNextToken();
+
+  if(currTok != '(')
+    return LogErrorP("Expected '(' in prototype");
+  vector<string> ArgName;
+  while(getNextToken() == tok_identifier)
+    ArgName.push_back(IdentifierStr);
+  if(currTok != ')')
+    return LogErrorP("Expected ')' in prototype");
+  
+  getNextToken();
+  return std::make_unique<ProtoTypeAST>(FnName, std::move(ArgName));
+}
+
+std::unique_ptr<FunctionAST> ParseDefinition(){
+  getNextToken();
+  auto Proto = ParsePrototype();
+  if(!Proto) return nullptr;
+  if(auto E = ParseExpression())
+    return std::make_unique<FunctionAST>(std::move(Proto), std::move(E));
+  return nullptr; 
+}
+
+static std::unique_ptr<ProtoTypeAST> ParseExtern(){
+  getNextToken();
+  return ParsePrototype();
+}
+
+static std::unique_ptr<FunctionAST> ParseTopLevelExpr(){
+  if(auto E = ParseExpression()){
+    auto Proto = std::make_unique<ProtoTypeAST>("", std::vector<string>());
+    return std::make_unique<FunctionAST>(std::move(Proto), std::move(E));
+  }
+  return nullptr;
+}
   
 int main(){
+  BinOpPrecedence['<'] = 10;
+  BinOpPrecedence['+'] = 20;
+  BinOpPrecedence['-'] = 30;
+  BinOpPrecedence['*'] = 40;
   // while(true){
   //   int tok = gettok();
   //   cout << token_to_string(tok) << endl;
