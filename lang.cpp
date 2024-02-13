@@ -142,11 +142,15 @@ class ProtoTypeAST{
 class FunctionAST{
   std::unique_ptr<ProtoTypeAST> Proto; 
   std::unique_ptr<ExprAST> Body;
-
-  FunctionAST(std::unique_ptr<ProtoTypeAST> Proto, 
-  std::unique_ptr<ExprAST> Body)
-  : Proto(std::move(Proto)), Body(std::move(Body)) {}
+  
+  public:
+    FunctionAST(std::unique_ptr<ProtoTypeAST> Proto, 
+    std::unique_ptr<ExprAST> Body)
+    : Proto(std::move(Proto)), Body(std::move(Body)) {}
 };
+
+static std::unique_ptr<ExprAST> ParseExpression();
+static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec, std::unique_ptr<ExprAST> LHS);
 
 static int currTok;
 static int getNextToken(){
@@ -307,6 +311,58 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr(){
   }
   return nullptr;
 }
+
+
+static void HandleDefinition() {
+  if (ParseDefinition()) {
+    fprintf(stderr, "Parsed a function definition.\n");
+  } else {
+    // Skip token for error recovery.
+    getNextToken();
+  }
+}
+
+static void HandleExtern() {
+  if (ParseExtern()) {
+    fprintf(stderr, "Parsed an extern\n");
+  } else {
+    // Skip token for error recovery.
+    getNextToken();
+  }
+}
+
+static void HandleTopLevelExpression() {
+  // Evaluate a top-level expression into an anonymous function.
+  if (ParseTopLevelExpr()) {
+    fprintf(stderr, "Parsed a top-level expr\n");
+  } else {
+    // Skip token for error recovery.
+    getNextToken();
+  }
+}
+
+/// top ::= definition | external | expression | ';'
+static void MainLoop() {
+  while (true) {
+    fprintf(stderr, "ready> ");
+    switch (currTok) {
+    case tok_eof:
+      return;
+    case ';': // ignore top-level semicolons.
+      getNextToken();
+      break;
+    case tok_func:
+      HandleDefinition();
+      break;
+    case tok_extern:
+      HandleExtern();
+      break;
+    default:
+      HandleTopLevelExpression();
+      break;
+    }
+  }
+}
   
 int main(){
   BinOpPrecedence['<'] = 10;
@@ -317,5 +373,11 @@ int main(){
   //   int tok = gettok();
   //   cout << token_to_string(tok) << endl;
   // }
-}
+  fprintf(stderr, "ready> ");
+  getNextToken();
 
+  // Run the main "interpreter loop" now.
+  MainLoop();
+
+  return 0;
+}
