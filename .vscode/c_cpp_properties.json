@@ -8,9 +8,22 @@
                 "/usr/include/llvm-c-17"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/g++",
+            "compilerPath": "/usr/bin/clang++",
+            "cStandard": "c23",
+            "cppStandard": "c++23",
+            "intelliSenseMode": "linux-clang-x64",
+            "compilerArgs": [
+                "`llvm-config --cxxflags --ldflags --system-libs --libs core`"
+            ]
+        },
+        {
+            "name": "llvm",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
             "cStandard": "c17",
-            "cppStandard": "c++14",
+            "cppStandard": "c++17",
             "intelliSenseMode": "linux-clang-x64"
         }
     ],

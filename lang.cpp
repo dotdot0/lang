@@ -1,10 +1,24 @@
-#include<string>
-#include<iostream>
-#include<memory>
-#include<vector>
-#include<map>
+#include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Verifier.h"
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
 
-using namespace std;
+using namespace llvm;
 
 /*
 =====Lexer=====
@@ -92,18 +106,21 @@ std::string token_to_string(int tok){
 class ExprAST{
   public: 
     virtual ~ExprAST() = default;
+    virtual Value *codegen() = 0;
 };
 
 class NumberExprAST : public ExprAST{
   double Val;
   public:
     NumberExprAST(double val) : Val(Val){}
+    Value *codegen() override;
 };
 
 class VariableExprAST: public ExprAST{
   std::string Name;
   public: 
     VariableExprAST(const std::string &Name) : Name(Name){}
+    Value *codegen() override;
 };
 
 class BinaryExprAST: public ExprAST{
@@ -115,6 +132,8 @@ class BinaryExprAST: public ExprAST{
     std::unique_ptr<ExprAST> LHS, 
     std::unique_ptr<ExprAST> RHS): 
     Op(Op), LHS(std::move(LHS)), RHS(std::move(RHS)) {}
+
+    Value *codegen() override;
 };
 
 class CallExprAST : public ExprAST{
@@ -125,6 +144,8 @@ class CallExprAST : public ExprAST{
     CallExprAST(const std::string &Calle, 
     std::vector<std::unique_ptr<ExprAST>> Args) 
     : Calle(Calle), Args(std::move(Args)){}
+
+    Value *codegen() override;
 };
 
 class ProtoTypeAST{
@@ -136,7 +157,10 @@ class ProtoTypeAST{
     std::vector<std::string> Args)
     : Name(Name), Args(Args){}
 
+    Function *codegen();
+
     const std::string &getName() const { return Name; }
+
 };
 
 class FunctionAST{
@@ -147,6 +171,8 @@ class FunctionAST{
     FunctionAST(std::unique_ptr<ProtoTypeAST> Proto, 
     std::unique_ptr<ExprAST> Body)
     : Proto(std::move(Proto)), Body(std::move(Body)) {}
+
+    Function *codegen();
 };
 
 static std::unique_ptr<ExprAST> ParseExpression();
@@ -275,12 +301,12 @@ static std::unique_ptr<ProtoTypeAST> ParsePrototype(){
   if(currTok != tok_identifier)
     return LogErrorP("Expected function name in prototype");
   
-  string FnName = IdentifierStr;
+  std::string FnName = IdentifierStr;
   getNextToken();
 
   if(currTok != '(')
     return LogErrorP("Expected '(' in prototype");
-  vector<string> ArgName;
+  std::vector<std::string> ArgName;
   while(getNextToken() == tok_identifier)
     ArgName.push_back(IdentifierStr);
   if(currTok != ')')
@@ -306,7 +332,7 @@ static std::unique_ptr<ProtoTypeAST> ParseExtern(){
 
 static std::unique_ptr<FunctionAST> ParseTopLevelExpr(){
   if(auto E = ParseExpression()){
-    auto Proto = std::make_unique<ProtoTypeAST>("", std::vector<string>());
+    auto Proto = std::make_unique<ProtoTypeAST>("", std::vector<std::string>());
     return std::make_unique<FunctionAST>(std::move(Proto), std::move(E));
   }
   return nullptr;
