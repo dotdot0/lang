@@ -338,6 +338,68 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr(){
   return nullptr;
 }
 
+/*
+=====CodeGen=====
+*/
+
+static std::unique_ptr<LLVMContext> TheContext;
+static std::unique_ptr<IRBuilder<>> Builder = std::unique_ptr<IRBuilder<>>(new IRBuilder<>(*TheContext));
+static std::unique_ptr<Module> TheModule;
+static std::map<std::string, Value *> NamedValues;
+
+Value *LogErrorV(const char *str){
+  LogError(str);
+  return nullptr;
+}
+
+Value *NumberExprAST::codegen(){
+  return ConstantFP::get(*TheContext, APFloat(Val));
+}
+
+Value *VariableExprAST::codegen(){
+  Value *V = NamedValues[Name];
+  if(!V) LogErrorV("Unknown Variable Name");
+  return V;
+}
+
+Value *BinaryExprAST::codegen(){
+  Value *L = LHS->codegen();
+  Value *R = LHS->codegen();
+
+  if(!L || !R){
+    return nullptr;
+  }
+
+  switch (Op)
+  {
+  case '+':
+    return Builder->CreateFAdd(L,R,"addtmp");
+  case '-':
+    return Builder->CreateFSub(L,R,"subtmp");
+  case '*':
+    return Builder->CreateFMul(L,R,"multmp");
+  case '<':
+    L = Builder->CreateFCmpULT(L, R, "cmptmp");
+    return Builder->CreateUIToFP(L, Type::getDoubleTy(*TheContext), "booltmp");
+  default:
+    return LogErrorV("Invalid Binary operator");
+  }
+}
+
+Value *CallExprAST::codegen(){
+  Function *CalleeF = TheModule->getFunction(Calle);
+  if(!CalleeF) return LogErrorV("Unknown function referenced");
+
+  if(CalleeF->arg_size() != Args.size()) return LogErrorV("Incorrect # of arguments");
+
+  std::vector<Value *> ArgsV;
+  for(unsigned i = 0, e = Args.size(); i!=e; ++i){
+    ArgsV.push_back(Args[i]->codegen());
+    if(!ArgsV.back()) return nullptr;
+  }
+
+  return Builder->CreateCall(CalleeF, ArgsV, "calltmp");
+}
 
 static void HandleDefinition() {
   if (ParseDefinition()) {
