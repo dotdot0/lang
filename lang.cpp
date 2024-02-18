@@ -401,9 +401,74 @@ Value *CallExprAST::codegen(){
   return Builder->CreateCall(CalleeF, ArgsV, "calltmp");
 }
 
+Function *ProtoTypeAST::codegen() {
+  // Make the function type:  double(double,double) etc.
+  std::vector<Type *> Doubles(Args.size(), Type::getDoubleTy(*TheContext));
+  FunctionType *FT =
+      FunctionType::get(Type::getDoubleTy(*TheContext), Doubles, false);
+
+  Function *F =
+      Function::Create(FT, Function::ExternalLinkage, Name, TheModule.get());
+
+  // Set names for all arguments.
+  unsigned Idx = 0;
+  for (auto &Arg : F->args())
+    Arg.setName(Args[Idx++]);
+
+  return F;
+}
+
+Function *FunctionAST::codegen() {
+  // First, check for an existing function from a previous 'extern' declaration.
+  Function *TheFunction = TheModule->getFunction(Proto->getName());
+
+  if (!TheFunction)
+    TheFunction = Proto->codegen();
+
+  if (!TheFunction)
+    return nullptr;
+
+  // Create a new basic block to start insertion into.
+  BasicBlock *BB = BasicBlock::Create(*TheContext, "entry", TheFunction);
+  Builder->SetInsertPoint(BB);
+
+  // Record the function arguments in the NamedValues map.
+  NamedValues.clear();
+  for (auto &Arg : TheFunction->args())
+    NamedValues[std::string(Arg.getName())] = &Arg;
+
+  if (Value *RetVal = Body->codegen()) {
+    // Finish off the function.
+    Builder->CreateRet(RetVal);
+
+    // Validate the generated code, checking for consistency.
+    verifyFunction(*TheFunction);
+
+    return TheFunction;
+  }
+
+  // Error reading body, remove function.
+  TheFunction->eraseFromParent();
+  return nullptr;
+}
+
+
+static void InitializeModule() {
+  // Open a new context and module.
+  TheContext = std::make_unique<LLVMContext>();
+  TheModule = std::make_unique<Module>("my cool jit", *TheContext);
+
+  // Create a new builder for the module.
+  Builder = std::make_unique<IRBuilder<>>(*TheContext);
+}
+
 static void HandleDefinition() {
-  if (ParseDefinition()) {
-    fprintf(stderr, "Parsed a function definition.\n");
+  if (auto FnAST = ParseDefinition()) {
+    if (auto *FnIR = FnAST->codegen()) {
+      fprintf(stderr, "Read function definition:");
+      FnIR->print(errs());
+      fprintf(stderr, "\n");
+    }
   } else {
     // Skip token for error recovery.
     getNextToken();
@@ -411,8 +476,12 @@ static void HandleDefinition() {
 }
 
 static void HandleExtern() {
-  if (ParseExtern()) {
-    fprintf(stderr, "Parsed an extern\n");
+  if (auto ProtoAST = ParseExtern()) {
+    if (auto *FnIR = ProtoAST->codegen()) {
+      fprintf(stderr, "Read extern: ");
+      FnIR->print(errs());
+      fprintf(stderr, "\n");
+    }
   } else {
     // Skip token for error recovery.
     getNextToken();
@@ -421,8 +490,15 @@ static void HandleExtern() {
 
 static void HandleTopLevelExpression() {
   // Evaluate a top-level expression into an anonymous function.
-  if (ParseTopLevelExpr()) {
-    fprintf(stderr, "Parsed a top-level expr\n");
+  if (auto FnAST = ParseTopLevelExpr()) {
+    if (auto *FnIR = FnAST->codegen()) {
+      fprintf(stderr, "Read top-level expression:");
+      FnIR->print(errs());
+      fprintf(stderr, "\n");
+
+      // Remove the anonymous expression.
+      FnIR->eraseFromParent();
+    }
   } else {
     // Skip token for error recovery.
     getNextToken();
@@ -463,9 +539,9 @@ int main(){
   // }
   fprintf(stderr, "ready> ");
   getNextToken();
-
+  InitializeModule();
   // Run the main "interpreter loop" now.
   MainLoop();
-
+  TheModule->print(errs(), nullptr);
   return 0;
 }
